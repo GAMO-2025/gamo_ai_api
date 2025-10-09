@@ -4,7 +4,7 @@ import google.generativeai as genai
 # 내부 모듈
 from app.core.config import settings
 from app.database import Base, engine
-from app.routers import keyword_api
+from app.routers import keyword_api, letter_api
 
 # Gemini API 키 설정
 genai.configure(api_key=settings.GEMINI_API_KEY)
@@ -17,6 +17,7 @@ app = FastAPI(title="GAMO AI Keyword API")
 
 # 라우터 등록
 app.include_router(keyword_api.router, prefix="/api", tags=["Keywords"])
+app.include_router(letter_api.router, prefix="/api", tags=["Letters"])
 
 @app.get("/")
 def root():

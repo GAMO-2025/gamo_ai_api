@@ -9,3 +9,4 @@ class Keyword(Base):
     keyword = Column(String(255), nullable=False)
     videocallId = Column(Integer, nullable=False)
     date = Column(DateTime(timezone=True), server_default=func.now())  # DB 자동 시간
+    weight = Column(Integer, nullable=False, default=0)
