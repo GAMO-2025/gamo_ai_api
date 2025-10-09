@@ -1,78 +1,86 @@
-# --- 라이브러리 임포트 ---
-import os                                    # 운영체제와 상호작용하기 위한 라이브러리
-import json                                  # JSON 형식 데이터를 다루기 위한 라이브러리
-from typing import List, Dict                  # 타입 힌팅을 위한 라이브러리
-from dotenv import load_dotenv               # .env 파일에서 환경 변수를 불러오기 위한 라이브러리
-import google.generativeai as genai          # Gemini API를 사용하기 위한 구글 라이브러리
-from fastapi import FastAPI, HTTPException   # API 서버를 만들기 위한 FastAPI 라이브러리
-from pydantic import BaseModel, Field        # 데이터 유효성 검사를 위한 Pydantic 라이브러리
+import json
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
+import google.generativeai as genai
 
-# --- 초기 설정 ---
-load_dotenv()                                # .env 파일의 내용을 환경 변수로 로드합니다.
-app = FastAPI()                              # FastAPI 애플리케이션 인스턴스를 생성합니다.
-DB_FILE = "keyword_db.json"                  # 키워드를 조회할 JSON 파일의 이름을 정의합니다.
+# --- 내부 모듈 임포트 ---
+from app.database import get_db
+from app.database.models import Keyword
+from app.utils.id_utils import generate_keyword_id
+from pydantic import BaseModel, Field
 
-# Gemini API 키 설정
-try:
-    genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-except Exception as e:
-    print(f"API 키 설정에 실패했습니다: {e}")
+# --- 라우터 및 요청 모델 정의 ---
+router = APIRouter()
 
-# --- 데이터 모델 정의 ---
-# API가 요청(Request)으로 받을 데이터의 형식을 정의합니다.
-class RecommendTopicRequest(BaseModel):
-    call_ids: List[str] = Field(..., description="주제 추천의 기반이 될 과거 통화 ID 목록")
+class ProcessCallRequest(BaseModel):
+    call_id: int = Field(..., description="고유한 통화 ID")
+    text: str = Field(..., description="STT 변환된 통화 내용 전체")
 
-# API가 응답(Response)으로 보낼 데이터의 형식을 정의합니다.
-class TopicResponse(BaseModel):
-    recommended_topic: str
-
-# --- 데이터베이스 헬퍼 함수 ---
-# JSON 파일을 읽어 데이터를 반환하는 함수입니다.
-def read_db() -> Dict[str, List[str]]:
-    if not os.path.exists(DB_FILE):          # 만약 DB 파일이 존재하지 않으면,
-        return {}                            # 비어있는 딕셔너리를 반환합니다.
-    with open(DB_FILE, "r", encoding="utf-8") as f: # DB 파일을 읽기 모드로 엽니다.
-        return json.load(f)                  # 파일의 JSON 내용을 파이썬 딕셔너리로 변환하여 반환합니다.
-
-# --- API 엔드포인트 구현 ---
-# POST 방식으로 /recommend-topic 주소로 요청이 들어왔을 때 아래 함수를 실행합니다.
-@app.post("/recommend-topic", summary="키워드 기반 통화 주제 추천", response_model=TopicResponse)
-async def recommend_topic_based_on_keywords(request: RecommendTopicRequest):
-    # DB 파일을 읽어 현재 저장된 모든 키워드 데이터를 가져옵니다.
-    db_data = read_db()
-    # 추천의 기반이 될 모든 키워드를 담을 빈 리스트를 생성합니다.
-    all_keywords = []
-
-    # 클라이언트가 요청한 모든 통화 ID에 대해 반복합니다.
-    for call_id in request.call_ids:
-        # 만약 현재 통화 ID가 DB 데이터에 존재하면,
-        if call_id in db_data:
-            # 해당 ID의 키워드 리스트를 전체 키워드 리스트에 추가합니다.
-            all_keywords.extend(db_data[call_id])
-
-    # 만약 관련된 키워드가 하나도 없으면,
-    if not all_keywords:
-        # 404 상태 코드와 함께 오류 메시지를 반환합니다.
-        raise HTTPException(status_code=404, detail="관련된 키워드를 찾을 수 없습니다.")
-
-    # 전체 키워드 리스트에서 중복된 항목을 제거하여 더 명확한 프롬프트를 만듭니다.
-    unique_keywords = list(set(all_keywords))
-
-    # Gemini 모델을 선택합니다.
+# --- API 엔드포인트 ---
+@router.post("/process-call", summary="통화 내용에서 키워드 추출 및 저장")
+async def process_call_and_store_keywords(
+    request: ProcessCallRequest,
+    db: Session = Depends(get_db)
+):
     model = genai.GenerativeModel('models/gemini-pro-latest')
-    # 키워드를 기반으로 추천 주제 문장을 생성하도록 요청하는 프롬프트를 작성합니다.
     prompt = f"""
-    아래 [핵심 키워드 목록]은 한 사람과 나누었던 과거 대화들의 주제입니다.
-    이 키워드들을 자연스럽게 엮어서, 대화를 시작할 수 있는 친근한 추천 문장 하나만 만들어줘.
-    [핵심 키워드 목록]
-    {', '.join(unique_keywords)}
+    당신은 대화의 핵심 요점을 정리하는 AI 분석가입니다.
+    아래 [대화 내용]을 분석하여, 다음 규칙에 따라 핵심 주제들을 **요약된 문장 형태**로 추출해 주세요.
+
+    [규칙]
+    1.  **단일 키워드가 아닌, 문맥을 포함한 핵심 주제를 요약된 문장으로 추출해야 합니다.**
+        -   (좋은 예시): "할머니가 된장국을 끓여준다고 약속함"
+        -   (좋은 예시): "기숙사 밥이 짜서 맛없다고 이야기함"
+        -   (나쁜 예시): "된장국"
+        -   (나쁜 예시): "기숙사 밥"
+    2.  대화의 길이에 따라 주제의 개수를 2개에서 5개 사이로 조절하세요.
+    3.  각 주제의 중요도를 대화의 핵심과 얼마나 관련이 깊은지에 따라 1(낮음)부터 5(매우 높음) 사이의 숫자로 평가하세요.
+    4.  결과는 반드시 아래 [출력 형식]과 동일한 JSON 형식으로만 반환해야 합니다. 다른 설명은 절대 추가하지 마세요.
+
+    [출력 형식]
+    [
+      {{"keyword": "추출된 주제 요약 문장 1", "weight": 중요도_숫자}},
+      {{"keyword": "추출된 주제 요약 문장 2", "weight": 중요도_숫자}}
+    ]
+
+    [대화 내용]
+    {request.text}
     """
     try:
-        # Gemini API를 호출하여 응답을 받습니다.
         response = await model.generate_content_async(prompt)
-        # 생성된 추천 주제를 클라이언트에게 반환합니다.
-        return {"recommended_topic": response.text.strip()}
+        cleaned = response.text.strip().replace("```json", "").replace("```", "")
+        # [{'keyword': '시장 축제', 'weight': 5}, ...] 형태의 리스트
+        keywords_data = json.loads(cleaned)
+
+        stored_items = []
+        for item in keywords_data:
+            # keywordId 중복 방지
+            while True:
+                new_id = generate_keyword_id()
+                if not db.query(Keyword).filter(Keyword.keywordId == new_id).first():
+                    break
+            
+            entry = Keyword(
+                keywordId=new_id,
+                keyword=item["keyword"],
+                weight=item["weight"],
+                videocallId=request.call_id
+            )
+            db.add(entry)
+            stored_items.append({"keyword": item["keyword"], "weight": item["weight"]})
+
+        db.commit()
+
+        return {
+            "message": f"'{request.call_id}'에 대한 키워드와 가중치가 성공적으로 저장되었습니다.",
+            "stored_items": stored_items
+        }
+    except (json.JSONDecodeError, KeyError) as e:
+        # Gemini가 약속된 JSON 형식으로 응답하지 않았을 경우의 오류 처리
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Gemini 응답 처리 중 오류 발생 (잘못된 형식): {str(e)}")
     except Exception as e:
-        # 오류 발생 시 500 상태 코드와 함께 오류 메시지를 반환합니다.
-        raise HTTPException(status_code=500, detail=f"주제 생성 중 오류 발생: {str(e)}")
+        # 그 외 모든 예외에 대한 처리
+        db.rollback() # 오류 발생 시 DB 변경사항을 원래대로 되돌림
+        raise HTTPException(status_code=500, detail=f"키워드 추출 또는 저장 중 오류 발생: {str(e)}")
+
