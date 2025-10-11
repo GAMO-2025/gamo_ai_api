@@ -17,7 +17,7 @@ class ProcessCallRequest(BaseModel):
     text: str = Field(..., description="STT 변환된 통화 내용 전체")
 
 # --- API 엔드포인트 ---
-@router.post("/process-call", summary="통화 내용에서 키워드 추출 및 저장")
+@router.post("/keyword", summary="통화 내용에서 키워드 추출 및 저장")
 async def process_call_and_store_keywords(
     request: ProcessCallRequest,
     db: Session = Depends(get_db)
