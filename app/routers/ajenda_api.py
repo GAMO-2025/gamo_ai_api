@@ -22,7 +22,7 @@ class RecommendResponse(BaseModel):
     recommended_topic: str
 
 # --- API 엔드포인트 구현 ---
-@router.post("/recommend-topic",
+@router.post("/ajenda",
              summary="키워드 우선순위 기반 통화 주제 추천",
              response_model=RecommendResponse)
 async def recommend_topic(

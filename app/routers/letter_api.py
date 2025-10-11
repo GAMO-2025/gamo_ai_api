@@ -18,7 +18,7 @@ class LetterResponse(BaseModel):
 
 # --- API 엔드포인트 구현 ---
 # POST 방식으로 /correct-letter 주소로 요청이 들어왔을 때 아래 함수를 실행합니다.
-@router.post("/correct-letter",
+@router.post("/letter",
              summary="음성 변환 텍스트를 자연스러운 편지글로 교정",
              response_model=LetterResponse)
 async def correct_letter_text(request: LetterRequest):
