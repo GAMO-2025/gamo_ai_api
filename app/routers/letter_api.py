@@ -12,15 +12,15 @@ class LetterRequest(BaseModel):
     text: str = Field(..., description="STT로 변환된, 다듬어지지 않은 원본 편지 텍스트")
 
 # API가 클라이언트에게 보낼 응답(Response)의 형식을 정의합니다.
-class RecommendResponse(BaseModel):
+class LetterResponse(BaseModel):
     status: int
-    recommended_topic: str
+    corrected_text: str
 
 # --- API 엔드포인트 구현 ---
 # POST 방식으로 /correct-letter 주소로 요청이 들어왔을 때 아래 함수를 실행합니다.
 @router.post("/letter",
              summary="음성 변환 텍스트를 자연스러운 편지글로 교정",
-             response_model=RecommendResponse,
+             response_model=LetterResponse,
              status_code=status.HTTP_200_OK)
 async def correct_letter_text(request: LetterRequest):
     """
@@ -49,18 +49,21 @@ async def correct_letter_text(request: LetterRequest):
     """
     try:
         response = await model.generate_content_async(prompt)
-        # 성공 시, status가 포함된 JSON 본문 반환
+        corrected_text = response.text.strip()
+
+        # 성공 시, status가 포함된 JSON 본문을 반환합니다.
         return {
             "status": 200,
-            "recommended_topic": response.text.strip()
+            "corrected_text": corrected_text
         }
     except Exception as e:
-        # 실패 시, status가 포함된 JSONResponse 반환
+        # 실패 시, status가 포함된 JSON 본문을 직접 만들어 반환합니다.
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "status": 500,
-                "detail": f"주제 생성 중 오류 발생: {str(e)}"
+                "detail": f"편지 교정 중 오류 발생: {str(e)}"
             }
         )
+
     
