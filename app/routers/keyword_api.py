@@ -1,5 +1,6 @@
 import json
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import google.generativeai as genai
 
@@ -15,10 +16,16 @@ router = APIRouter()
 class ProcessCallRequest(BaseModel):
     call_id: int = Field(..., description="고유한 통화 ID")
     text: str = Field(..., description="STT 변환된 통화 내용 전체")
+    
+class KeywordProcessResponse(BaseModel):
+    status: int
+    videocallId: str
+
 
 # --- API 엔드포인트 ---
 @router.post("/keyword",
              summary="통화 내용에서 키워드 추출 및 저장",
+             response_model=KeywordProcessResponse,
              status_code=status.HTTP_200_OK) # 성공 시 기본 상태 코드를 200으로 명시)
 async def process_call_and_store_keywords(
     request: ProcessCallRequest,
@@ -72,20 +79,29 @@ async def process_call_and_store_keywords(
             stored_items.append({"keyword": item["keyword"], "weight": item["weight"]})
 
         db.commit() # 모든 키워드를 한 번에 DB에 최종 저장
-        # 성공 시, 저장된 키워드 없이 간단한 성공 메시지만 반환
-        return {"message": f"'{request.call_id}'에 대한 키워드가 성공적으로 처리되었습니다."}
+        # 성공 시, status가 포함된 JSON 본문 반환
+        return {
+            "status": 200,
+            "videocallId": request.call_id
+        }
     except (json.JSONDecodeError, KeyError) as e:
-        # 실패 시에는 구체적인 오류 내용을 담아 500 에러를 반환
         db.rollback()
-        raise HTTPException(
+        # 실패 시, status가 포함된 JSONResponse 반환
+        return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gemini 응답 처리 중 오류 발생 (잘못된 형식): {str(e)}"
+            content={
+                "status": 500,
+                "detail": f"Gemini 응답 처리 중 오류 발생 (잘못된 형식): {str(e)}"
+            }
         )
     except Exception as e:
-        # 그 외 모든 예외에 대한 처리
-        db.rollback() # 오류 발생 시 DB 변경사항을 원래대로 되돌림
-        raise HTTPException(
+        db.rollback()
+        # 실패 시, status가 포함된 JSONResponse 반환
+        return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"키워드 추출 또는 저장 중 오류 발생: {str(e)}"
+            content={
+                "status": 500,
+                "detail": f"키워드 추출 또는 저장 중 오류 발생: {str(e)}"
+            }
         )
 
