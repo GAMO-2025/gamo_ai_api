@@ -1,5 +1,5 @@
 # --- 라이브러리 임포트 ---
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 import google.generativeai as genai
 
@@ -8,19 +8,18 @@ router = APIRouter()
 
 # API가 클라이언트로부터 받을 요청(Request)의 형식을 정의합니다.
 class LetterRequest(BaseModel):
-    letter_id: str = Field(..., description="클라이언트가 생성한 고유한 편지 ID")
     text: str = Field(..., description="STT로 변환된, 다듬어지지 않은 원본 편지 텍스트")
 
 # API가 클라이언트에게 보낼 응답(Response)의 형식을 정의합니다.
 class LetterResponse(BaseModel):
-    letter_id: str
     corrected_text: str
 
 # --- API 엔드포인트 구현 ---
 # POST 방식으로 /correct-letter 주소로 요청이 들어왔을 때 아래 함수를 실행합니다.
 @router.post("/letter",
              summary="음성 변환 텍스트를 자연스러운 편지글로 교정",
-             response_model=LetterResponse)
+             response_model=LetterResponse,
+             status_code=status.HTTP_200_OK)
 async def correct_letter_text(request: LetterRequest):
     """
     STT로 변환된 원본 텍스트를 받아, Gemini를 이용해 자연스러운 편지글로 교정한 후,
@@ -55,10 +54,12 @@ async def correct_letter_text(request: LetterRequest):
 
         # 클라이언트에게 원본 letter_id와 교정된 텍스트를 함께 반환합니다.
         return {
-            "letter_id": request.letter_id,
             "corrected_text": corrected_text
         }
     except Exception as e:
         # 오류 발생 시 500 상태 코드와 함께 오류 메시지를 반환합니다.
-        raise HTTPException(status_code=500, detail=f"편지 교정 중 오류 발생: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"편지 교정 중 오류 발생: {str(e)}"
+        )
     
