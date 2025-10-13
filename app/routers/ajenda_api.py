@@ -1,7 +1,7 @@
 # --- 라이브러리 임포트 ---
 import math
 from typing import List
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
 import google.generativeai as genai
 
@@ -24,7 +24,8 @@ class RecommendResponse(BaseModel):
 # --- API 엔드포인트 구현 ---
 @router.post("/ajenda",
              summary="키워드 우선순위 기반 통화 주제 추천",
-             response_model=RecommendResponse)
+             response_model=RecommendResponse,
+             status_code=status.HTTP_200_OK)
 async def recommend_topic(
     request: RecommendRequest,
     db: Session = Depends(get_db)
@@ -79,4 +80,7 @@ async def recommend_topic(
         # 최종 생성된 추천 문장을 반환
         return {"recommended_topic": response.text.strip()}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"주제 생성 중 오류 발생: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"주제 생성 중 오류 발생: {str(e)}"
+        )
