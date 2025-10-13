@@ -1,5 +1,6 @@
 # --- 라이브러리 임포트 ---
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 import google.generativeai as genai
 
@@ -11,14 +12,15 @@ class LetterRequest(BaseModel):
     text: str = Field(..., description="STT로 변환된, 다듬어지지 않은 원본 편지 텍스트")
 
 # API가 클라이언트에게 보낼 응답(Response)의 형식을 정의합니다.
-class LetterResponse(BaseModel):
-    corrected_text: str
+class RecommendResponse(BaseModel):
+    status: int
+    recommended_topic: str
 
 # --- API 엔드포인트 구현 ---
 # POST 방식으로 /correct-letter 주소로 요청이 들어왔을 때 아래 함수를 실행합니다.
 @router.post("/letter",
              summary="음성 변환 텍스트를 자연스러운 편지글로 교정",
-             response_model=LetterResponse,
+             response_model=RecommendResponse,
              status_code=status.HTTP_200_OK)
 async def correct_letter_text(request: LetterRequest):
     """
@@ -46,20 +48,19 @@ async def correct_letter_text(request: LetterRequest):
     {request.text}
     """
     try:
-        # Gemini API를 호출하여 응답을 받습니다.
         response = await model.generate_content_async(prompt)
-
-        # Gemini가 교정한 텍스트를 변수에 저장합니다.
-        corrected_text = response.text.strip()
-
-        # 클라이언트에게 원본 letter_id와 교정된 텍스트를 함께 반환합니다.
+        # 성공 시, status가 포함된 JSON 본문 반환
         return {
-            "corrected_text": corrected_text
+            "status": 200,
+            "recommended_topic": response.text.strip()
         }
     except Exception as e:
-        # 오류 발생 시 500 상태 코드와 함께 오류 메시지를 반환합니다.
-        raise HTTPException(
+        # 실패 시, status가 포함된 JSONResponse 반환
+        return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"편지 교정 중 오류 발생: {str(e)}"
+            content={
+                "status": 500,
+                "detail": f"주제 생성 중 오류 발생: {str(e)}"
+            }
         )
     

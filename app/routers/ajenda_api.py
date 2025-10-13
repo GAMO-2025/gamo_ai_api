@@ -2,6 +2,7 @@
 import math
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 import google.generativeai as genai
 
@@ -19,6 +20,7 @@ class RecommendRequest(BaseModel):
 
 # API가 클라이언트에게 보낼 응답(Response)의 형식을 정의합니다.
 class RecommendResponse(BaseModel):
+    status: int
     recommended_topic: str
 
 # --- API 엔드포인트 구현 ---
@@ -77,10 +79,17 @@ async def recommend_topic(
     """
     try:
         response = await model.generate_content_async(prompt)
-        # 최종 생성된 추천 문장을 반환
-        return {"recommended_topic": response.text.strip()}
+        # 성공 시, status가 포함된 JSON 본문 반환
+        return {
+            "status": 200,
+            "recommended_topic": response.text.strip()
+        }
     except Exception as e:
-        raise HTTPException(
+        # 실패 시, status가 포함된 JSONResponse 반환
+        return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"주제 생성 중 오류 발생: {str(e)}"
+            content={
+                "status": 500,
+                "detail": f"주제 생성 중 오류 발생: {str(e)}"
+            }
         )
