@@ -1,5 +1,6 @@
 # --- 라이브러리 임포트 ---
 import math
+import json
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
@@ -58,32 +59,23 @@ async def recommend_topic(
     
     prompt = f"""
     당신은 따뜻한 대화를 이끌어내는 전문 상담가입니다.
-    아래 [규칙]과 [완전한 작업 예시]를 참고하여, [핵심 주제 목록]을 자연스럽게 연결한 **단 한 개의 친근한 질문 문장**을 만들어 주세요.
-
+    아래 [핵심 주제 목록]은 한 사람과 나누었던 과거 대화 중 가장 중요하고 최근의 주제들입니다.
+    이 주제들을 자연스럽게 연결하여, 상대방의 안부를 묻고 대화를 시작할 수 있는
+    **자연스럽고 친근한 단 한 개의 질문 문장**을 만들어 주세요.
+    
     [규칙]
-    1.  **출력은 반드시 최종 추천 문장 텍스트 한 줄이어야 합니다.**
-    2.  **"그럼요..."와 같은 서론, 잡담, 설명, 마크다운(`**`, `##` 등)을 절대 포함하지 마세요.**
-    3.  [핵심 주제 목록]의 주제들을 자연스럽게 엮어, 따뜻하고 친근한 **단 하나의 질문 문장**으로 만드세요.
-    4.  [완전한 작업 예시]의 [추천 문장] 형식을 완벽하게 따르세요.
+    1. **출력은 반드시 최종 추천 문장 텍스트 한 줄이어야 합니다.**
+    2. **"그럼요..."와 같은 서론, 잡담, 설명, 마크다운(`**`, `##` 등)을 절대 포함하지 마세요.**
 
     ---
-    [완전한 작업 예시 1 - 단일 주제]
-
-    [핵심 주제 목록]
-    - "기숙사 밥이 짜서 맛없다고 이야기함"
-
-    [추천 문장]
-    지난번에 기숙사 밥이 너무 짜다고 했는데, 요즘은 좀 입맛에 맞게 잘 나와요?
-    ---
-    [완전한 작업 예시 2 - 여러 주제]
+    [완전한 작업 예시]
 
     [핵심 주제 목록]
     - "할머니가 된장국을 끓여준다고 약속함"
     - "친구들과 찍은 사진에 대해 이야기함"
-    - "과제를 끝내고 피곤해함"
 
     [추천 문장]
-    그때 과제 끝내고 많이 피곤해 보였는데 컨디션은 좀 괜찮아졌어요? 친구분들이랑 찍은 사진도 잘 봤어요! 참, 할머니가 끓여주신다는 된장국은 맛있게 드셨어요?
+    친구분들이랑 찍은 사진도 잘 봤어요! 참, 할머니가 끓여주신다는 된장국은 맛있게 드셨어요?
     ---
     [실제 작업]
 
@@ -94,11 +86,16 @@ async def recommend_topic(
     """
     try:
         response = await model.generate_content_async(prompt)
+        
+        # 후처리 로직: AI가 실수로 서론을 포함할 경우, 마지막 문단만 선택
         cleaned_text = response.text.strip().replace("**", "")
         
+        parts = cleaned_text.split("\n\n")
+        final_topic = parts[-1].strip() 
+
         return {
             "status": 200,
-            "recommended_topic": cleaned_text
+            "recommended_topic": final_topic
         }
     except Exception as e:
         return JSONResponse(
