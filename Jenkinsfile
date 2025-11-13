@@ -4,7 +4,7 @@ pipeline {
     environment {
         // 배포 관련 정보
         DEPLOY_USER = 'pjhyun0225'
-        DEPLOY_HOST = '<AI_SERVER_PUBLIC_IP>'
+        DEPLOY_HOST = '34.158.203.193'
         DEPLOY_PATH = '/home/pjhyun0225/gamo_ai_api'
         PYTHON_ENV = 'python3' 
     }
@@ -53,3 +53,4 @@ pipeline {
         }
     }
 }
+ 
