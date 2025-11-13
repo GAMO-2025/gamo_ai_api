@@ -6,7 +6,7 @@ pipeline {
         DEPLOY_USER = 'pjhyun0225'
         DEPLOY_HOST = '34.158.203.193'
         DEPLOY_PATH = '/home/pjhyun0225/gamo_ai_api'
-        PYTHON_ENV = 'python3' 
+        PYTHON_ENV = 'python3'
     }
 
     stages {
@@ -22,7 +22,7 @@ pipeline {
                 echo '서버에 SSH 접속하여 배포 시작...'
                 sshagent(['ai-server-ssh']) {
                     sh '''
-                        ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST "
+                        ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST << 'EOF'
                             echo '배포 경로로 이동 중: $DEPLOY_PATH'
                             cd $DEPLOY_PATH || exit 1
 
@@ -37,7 +37,8 @@ pipeline {
                             nohup $PYTHON_ENV -m uvicorn main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
 
                             echo '배포 완료!'
-                        "
+                            exit 0
+EOF
                     '''
                 }
             }
@@ -53,4 +54,3 @@ pipeline {
         }
     }
 }
- 
