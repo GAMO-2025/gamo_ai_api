@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        // 배포 관련 정보
         DEPLOY_USER = 'pjhyun0225'
         DEPLOY_HOST = '34.158.203.193'
         DEPLOY_PATH = '/home/pjhyun0225/gamo_ai_api'
@@ -21,10 +20,10 @@ pipeline {
             steps {
                 echo '서버에 SSH 접속하여 배포 시작...'
                 sshagent(['ai-server-ssh']) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$DEPLOY_HOST << 'EOF'
-                            echo '배포 경로로 이동 중: $DEPLOY_PATH'
-                            cd $DEPLOY_PATH || exit 1
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} << 'EOF'
+                            echo '배포 경로로 이동 중: ${DEPLOY_PATH}'
+                            cd ${DEPLOY_PATH} || exit 1
 
                             echo '최신 main 코드로 업데이트 중...'
                             git fetch origin main &&
@@ -34,12 +33,12 @@ pipeline {
                             pkill -f 'uvicorn' || true
 
                             echo 'FastAPI 서버 재실행 중...'
-                            nohup $PYTHON_ENV -m uvicorn main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
+                            nohup ${PYTHON_ENV} -m uvicorn main:app --host 0.0.0.0 --port 8000 > server.log 2>&1 &
 
                             echo '배포 완료!'
                             exit 0
 EOF
-                    '''
+                    """
                 }
             }
         }
