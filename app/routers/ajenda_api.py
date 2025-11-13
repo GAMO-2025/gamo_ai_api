@@ -57,53 +57,72 @@ async def recommend_topic(
     # --- 3. Gemini를 이용한 최종 주제 문장 생성 ---
     model = genai.GenerativeModel('models/gemini-pro-latest')
     
-    # --- ✨✨ 서론 원천 차단 프롬프트 ✨✨ ---
+    # --- ✨✨ JSON 출력 강제를 위한 프롬프트 수정 ✨✨ ---
     prompt = f"""
     [임무]
-    당신은 입력된 [핵심 주제 목록]을 조합하여, 자연스러운 단 한 개의 [질문 문장]으로 변환하는 텍스트 생성기입니다.
+    당신은 입력된 [핵심 주제 목록]을 조합하여, [출력 형식]에 맞는 JSON 객체를 생성하는 텍스트 생성기입니다.
 
     [규칙]
-    1.  [핵심 주제 목록]의 주제들을 자연스럽게 엮어야 합니다.
-    2.  결과는 반드시 [질문 문장] 텍스트 하나여야 합니다.
-    3.  **"네, 알겠습니다", "그럼요"와 같은 모든 서론, 잡담, 설명, 마크다운(`**`, `##`)을 절대 포함하지 마세요.**
+    1.  [핵심 주제 목록]의 주제들을 자연스럽게 엮어, 따뜻하고 친근한 **단 하나의 질문 문장**을 만드세요.
+    2.  이 문장을 "recommended_topic" 키의 값으로 하는 JSON 객체를 생성하세요.
+    3.  **JSON 객체 외에 "그럼요..."와 같은 서론, 잡담, 설명 등 그 어떤 텍스트도 절대 반환하지 마세요.**
 
     ---
     [작업 예시 1]
     [핵심 주제 목록]:
     - "기숙사 밥이 짜서 맛없다고 이야기함"
-    [질문 문장]:
-    지난번에 기숙사 밥이 너무 짜다고 했는데, 요즘은 좀 입맛에 맞게 잘 나와요?
+    [출력 형식]:
+    {{
+      "recommended_topic": "지난번에 기숙사 밥이 너무 짜다고 했는데, 요즘은 좀 입맛에 맞게 잘 나와요?"
+    }}
     
     ---
     [작업 예시 2]
     [핵심 주제 목록]:
     - "할머니가 된장국을 끓여준다고 약속함"
     - "친구들과 찍은 사진에 대해 이야기함"
-    [질문 문장]:
-    친구분들이랑 찍은 사진도 잘 봤어요! 참, 할머니가 끓여주신다는 된장국은 맛있게 드셨어요?
+    [출력 형식]:
+    {{
+      "recommended_topic": "친구분들이랑 찍은 사진도 잘 봤어요! 참, 할머니가 끓여주신다는 된장국은 맛있게 드셨어요?"
+    }}
     
     ---
     [실제 작업]
     [핵심 주제 목록]:
     - {"\n- ".join(topic_sentences)}
-    [질문 문장]:
+    [출력 형식]:
     """
     try:
         response = await model.generate_content_async(prompt)
         
-        # --- ✨ 후처리 로직 강화 ✨ ---
-        # AI가 반환한 텍스트에서 불필요한 따옴표, 마크다운 등을 모두 제거합니다.
-        cleaned_text = response.text.strip().replace("**", "").replace('"', "")
+        # --- ✨ 응답 처리 로직 수정 (JSON 파싱) ✨ ---
+        # 1. Gemini가 반환한 텍스트에서 JSON 부분만 정확히 추출
+        # (AI가 실수로 JSON 앞뒤에 ```json ... ```을 붙이는 경우까지 대비)
+        cleaned_text = response.text.strip()
+        if '```json' in cleaned_text:
+            cleaned_text = cleaned_text.split('```json')[1].split('```')[0]
+        elif '```' in cleaned_text:
+             cleaned_text = cleaned_text.split('```')[1].split('```')[0]
+
+        # 2. 텍스트를 JSON 객체로 파싱
+        data = json.loads(cleaned_text)
         
-        # AI가 서론과 본론을 분리하는 모든 경우(\n\n 또는 \n)를 고려하여
-        # 무조건 맨 마지막 줄의 내용만 선택합니다.
-        parts = cleaned_text.splitlines() # \n과 \n\n을 모두 처리
-        final_topic = parts[-1].strip() # 맨 마지막 줄만 사용
+        # 3. JSON 객체에서 원하는 값만 추출
+        final_topic = data['recommended_topic']
 
         return {
             "status": 200,
             "recommended_topic": final_topic
         }
+    except (json.JSONDecodeError, KeyError) as e:
+        # Gemini가 약속된 JSON 형식(recommended_topic 키)을 안 지켰을 경우
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "status": 500,
+                "detail": f"Gemini 응답 파싱 중 오류 발생 (잘못된 형식): {str(e)} - (응답 원문: {response.text.strip()})"
+            }
+        )
     except Exception as e:
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
