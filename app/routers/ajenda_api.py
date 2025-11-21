@@ -64,7 +64,7 @@ async def recommend_topic(
     topic_sentences = [kw.keyword for kw in final_keywords]
 
     # 4. Gemini 호출 설정
-    model = genai.GenerativeModel('models/gemini-pro-latest')
+    model = genai.GenerativeModel('models/gemini-flash-latest')
     
     prompt = f"""
     [임무]

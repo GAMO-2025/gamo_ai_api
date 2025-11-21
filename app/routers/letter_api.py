@@ -1,4 +1,5 @@
 # --- 라이브러리 임포트 ---
+# import time
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -23,12 +24,14 @@ class LetterResponse(BaseModel):
              response_model=LetterResponse,
              status_code=status.HTTP_200_OK)
 async def correct_letter_text(request: LetterRequest):
+    # 1. [전체 타이머 시작] 함수가 호출되자마자 시간 체크
+    # func_start_time = time.time()
     """
     STT로 변환된 원본 텍스트를 받아, Gemini를 이용해 자연스러운 편지글로 교정한 후,
     원본 letter_id와 함께 교정된 텍스트를 반환합니다.
     """
     # Gemini 모델을 선택합니다.
-    model = genai.GenerativeModel('models/gemini-pro-latest')
+    model = genai.GenerativeModel('models/gemini-flash-latest')
 
     # Gemini에게 작업을 지시하는 프롬프트를 작성합니다. (가장 중요한 부분)
     prompt = f"""
@@ -47,6 +50,46 @@ async def correct_letter_text(request: LetterRequest):
     [원본 텍스트]
     {request.text}
     """
+    # try:
+    #     # 2. [Gemini 타이머 시작]
+    #     print("Gemini API 호출 시작...")
+    #     gemini_start = time.time() 
+
+    #     # 실제 Gemini에게 요청을 보내고 응답을 기다리는 부분
+    #     response = await model.generate_content_async(prompt)
+
+    #     # 3. [Gemini 타이머 종료]
+    #     gemini_end = time.time()
+    #     gemini_duration = gemini_end - gemini_start
+    #     print(f"Gemini API 응답 완료 소요 시간: {gemini_duration:.2f}초") 
+        
+    #     corrected_text = response.text.strip()
+
+    #     # 4. [전체 타이머 종료 및 결과 출력]
+    #     func_end_time = time.time()
+    #     total_duration = func_end_time - func_start_time
+    #     logic_duration = total_duration - gemini_duration # 전체 시간 - Gemini 시간 = 내 로직 시간
+
+    #     print(f"────────────────────────────────────────")
+    #     print(f"전체 수행 시간: {total_duration:.2f}초")
+    #     print(f"Gemini 처리 시간: {gemini_duration:.2f}초")
+    #     print(f"내 로직(순수 서버) 처리 시간: {logic_duration:.2f}초")
+    #     print(f"────────────────────────────────────────")
+
+    #     # 성공 시, status가 포함된 JSON 본문을 반환합니다.
+    #     return {
+    #         "status": 200,
+    #         "corrected_text": corrected_text
+    #     }
+    # except Exception as e:
+    #     # 실패 시, status가 포함된 JSON 본문을 직접 만들어 반환합니다.
+    #     return JSONResponse(
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #         content={
+    #             "status": 500,
+    #             "detail": f"편지 교정 중 오류 발생: {str(e)}"
+    #         }
+    #     )
     try:
         response = await model.generate_content_async(prompt)
         corrected_text = response.text.strip()

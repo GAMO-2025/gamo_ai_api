@@ -31,7 +31,7 @@ async def process_call_and_store_keywords(
     request: ProcessCallRequest,
     db: Session = Depends(get_db)
 ):
-    model = genai.GenerativeModel('models/gemini-pro-latest')
+    model = genai.GenerativeModel('models/gemini-flash-latest')
     prompt = f"""
     당신은 대화의 핵심 요점을 정리하는 AI 분석가입니다.
     아래 [규칙]과 [완전한 작업 예시]를 참고하여, [대화 내용]에서 핵심 주제들을 **요약된 문장 형태**로 추출해 주세요.
