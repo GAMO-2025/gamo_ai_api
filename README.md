@@ -54,7 +54,7 @@ https://www.youtube.com/watch?v=aL9ShCryn3M
 </div>
 
 ## 📁 프로젝트 구조
-### Spring 레포지토리 폴더 구조 
+### Python 레포지토리 폴더 구조 
 ```
 GAMO_AI_API/
 ├── app/                 # 애플리케이션 코드
