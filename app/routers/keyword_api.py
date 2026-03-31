@@ -1,10 +1,10 @@
 import json
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-import google.generativeai as genai
 
 # --- 내부 모듈 임포트 ---
+from app.core.openai_client import generate_text
 from app.database import get_db
 from app.database.models import Keyword
 from app.utils.id_utils import generate_keyword_id
@@ -31,7 +31,6 @@ async def process_call_and_store_keywords(
     request: ProcessCallRequest,
     db: Session = Depends(get_db)
 ):
-    model = genai.GenerativeModel('models/gemini-flash-latest')
     prompt = f"""
     당신은 대화의 문맥을 완벽하게 이해하고 핵심 요점을 정리하는 AI 분석가입니다.
     아래 [대화 내용]은 **STT(음성 인식)를 통해 텍스트로 변환된 결과물**입니다.
@@ -59,8 +58,8 @@ async def process_call_and_store_keywords(
     {request.text}
     """
     try:
-        response = await model.generate_content_async(prompt)
-        cleaned = response.text.strip().replace("```json", "").replace("```", "")
+        response_text = await generate_text(prompt)
+        cleaned = response_text.replace("```json", "").replace("```", "").strip()
         # keywords_data =[{'keyword': '시장 축제', 'weight': 5}, ...] 형태의 리스트
         keywords_data = json.loads(cleaned)
 
@@ -94,7 +93,7 @@ async def process_call_and_store_keywords(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "status": 500,
-                "detail": f"Gemini 응답 처리 중 오류 발생 (잘못된 형식): {str(e)}"
+                "detail": f"OpenAI 응답 처리 중 오류 발생 (잘못된 형식): {str(e)}"
             }
         )
     except Exception as e:
@@ -107,4 +106,3 @@ async def process_call_and_store_keywords(
                 "detail": f"키워드 추출 또는 저장 중 오류 발생: {str(e)}"
             }
         )
-

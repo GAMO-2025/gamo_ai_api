@@ -2,7 +2,8 @@ from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 class Settings(BaseSettings):
-    GEMINI_API_KEY: str
+    OPENAI_API_KEY: str
+    OPENAI_MODEL: str = "gpt-4o-mini"
     DB_USER: str
     DB_PASSWORD: str
     DB_HOST: str

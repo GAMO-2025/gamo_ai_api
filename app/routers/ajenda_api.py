@@ -5,9 +5,9 @@ from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-import google.generativeai as genai
 
 # --- 내부 모듈 임포트 ---
+from app.core.openai_client import generate_text
 from app.database import get_db
 from app.database.models import Keyword
 from pydantic import BaseModel, Field
@@ -63,9 +63,6 @@ async def recommend_topic(
     # 최종 키워드 문장 리스트
     topic_sentences = [kw.keyword for kw in final_keywords]
 
-    # 4. Gemini 호출 설정
-    model = genai.GenerativeModel('models/gemini-flash-latest')
-    
     prompt = f"""
     [임무]
     당신은 입력된 [핵심 주제 목록]에 있는 각각의 사실들을 문맥 왜곡 없이 연결하여, **대화 주제를 제안하는 하나의 문장**을 만드는 '문장 결합기'입니다.
@@ -99,10 +96,10 @@ async def recommend_topic(
     """
     
     try:
-        response = await model.generate_content_async(prompt)
+        response_text = await generate_text(prompt)
         
         # --- 응답 처리 로직 (JSON 파싱 및 서론 제거) ---
-        content = response.text.strip()
+        content = response_text.strip()
         
         # 마크다운 코드 블록 제거
         if '```' in content:
@@ -137,7 +134,7 @@ async def recommend_topic(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
                 "status": 500,
-                "detail": f"Gemini 응답 파싱 중 오류: {str(e)} - 원본: {response.text}"
+                "detail": f"OpenAI 응답 파싱 중 오류: {str(e)} - 원본: {response_text}"
             }
         )
     except Exception as e:
